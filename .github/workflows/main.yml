@@ -36,7 +36,15 @@ jobs:
       - name: Build Docker image
         run: docker build -t aceest-fitness:ci .
 
-      - name: Smoke-test container
+      - name: Run Pytest inside a container
+        run: |
+          docker run --rm \
+            --mount type=bind,source="$PWD",target=/workspace,readonly \
+            --workdir /workspace \
+            python:3.12-slim \
+            sh -c "python -m pip install --no-cache-dir -r requirements-dev.txt && python -B -m pytest -q"
+
+      - name: Smoke-test application container
         run: |
           docker run -d --name aceest-ci -p 5000:5000 aceest-fitness:ci
           for attempt in $(seq 1 15); do

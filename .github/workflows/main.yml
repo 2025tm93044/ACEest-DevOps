@@ -1,0 +1,52 @@
+name: ACEest CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements-dev.txt
+
+      - name: Check Python syntax
+        run: python -m compileall -q app.py tests
+
+      - name: Lint Python files
+        run: ruff check --select F app.py tests
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Build Docker image
+        run: docker build -t aceest-fitness:ci .
+
+      - name: Smoke-test container
+        run: |
+          docker run -d --name aceest-ci -p 5000:5000 aceest-fitness:ci
+          for attempt in $(seq 1 15); do
+            if python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2)"; then
+              docker logs aceest-ci
+              docker rm -f aceest-ci
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs aceest-ci
+          docker rm -f aceest-ci
+          exit 1
